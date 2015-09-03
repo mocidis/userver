@@ -1,36 +1,93 @@
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netinet/ip.h>
+#include <arpa/inet.h>
+#include <stdarg.h>
+
+#include <termios.h>
+#include <fcntl.h>
+
 #include "userver.h"
 #include "proto.h"
 #include "ansi-utils.h"
 #include <sys/select.h>
 
-static void on_sent(userver_t *userver, char *buff, int len) {
-	// ...
-}
-static void on_received(userver_t *userver, char *buff, int len) {
-	// ...
-}
-/*
-static void parse_request(char *buff, int len, void *request) {
+void userver_init(userver_t *userver, char *conn_str) {
+    userver->connect_str = conn_str;
 }
 
-static void build_response(char *buff, int len, va_list argp) {
-}
-*/
-void userver_init(userver_t *userver, int port) {
-	userver->port = port;
-	//userver->parse_request_f = &parse_request;
-	//userver->build_response_f = &build_response;
-}
-
-#define USERVER_BUFSIZE 512
-
-void *userver_proc(void *param) {
-	int ret, len;
+static void open_udp_socket(userver_t *userver, char *addr, int port) {
 	struct sockaddr_in saddr;
+    int ret;
+    
+	// create udp socket here
+	userver->fd = socket(AF_INET, SOCK_DGRAM, 0);
+	EXIT_IF_TRUE(userver->fd <= 0, "Cannot create socket\n");
+	
+	// bind the socket
+	memset(&saddr, '\0', sizeof(saddr));
+	saddr.sin_family = AF_INET;
+	saddr.sin_port = htons(port);
+    ret = inet_aton(addr, &saddr.sin_addr);
+    EXIT_IF_TRUE(ret==0, "Invalid ip address\n");
+
+	ret = bind(userver->fd, (struct sockaddr *)&saddr, sizeof(saddr));
+	EXIT_IF_TRUE(ret < 0, "Cannot bind socket to port\n");
+}
+
+static void open_tty(userver_t *userver, char *path) {
+    struct termios options;
+    
+    userver->fd = open(path, O_RDWR | O_NOCTTY);
+    EXIT_IF_TRUE(userver->fd < 0, "Cannot open port");
+    fcntl(userver->fd, F_SETFL, 0);
+
+    tcgetattr(userver->fd, &options);
+
+    cfsetispeed(&options, B9600);
+    cfsetospeed(&options, B9600);
+
+    options.c_cflag |= (CREAD |CLOCAL);
+    options.c_cflag &= ~CSIZE; /* Mask the character size bits */
+    options.c_cflag |= CS8;    /* Select 8 data bits */
+    options.c_cflag &= ~CRTSCTS;
+    options.c_iflag &= ~(IXON | IXOFF | IXANY);
+    //options->c_lflag |= (ICANON | ECHO | ECHOE); // Canonical mode
+
+    options.c_lflag &= ~(ICANON | ECHO); // RAW mode
+    options.c_cc[VMIN] = 0;
+    options.c_cc[VTIME] = 2; // measured in 0.1 second
+
+    tcsetattr(userver->fd, TCSANOW, &options);
+}
+
+static int udp_recvfrom(int fd, char *buff, int len, void *data, unsigned int *data_len) {
+    return recvfrom(fd, buff, len, 0, (struct sockaddr *)data, data_len);
+}
+
+static int tty_recvfrom(int fd, char *buff, int len, void *data, unsigned int *data_len) {
+    return read(fd, buff, len);
+}
+
+static int udp_sendto(int fd, char *buff, int len, void *data, unsigned int data_len) {
+    return sendto(fd, buff, len, 0, (struct sockaddr *)data, data_len);
+}
+
+static int tty_sendto(int fd, char *buff, int len, void *data, unsigned int data_len) {
+    return write(fd, buff, len);
+}
+#define USERVER_BUFSIZE 512
+void *userver_proc(void *param) {
+	int ret;
+    unsigned int len;
+    
+    int port;
+    char *first, *second, *third;
+
 	struct sockaddr_in caddr;
 	struct timeval timeout;
 
-	fd_set read_fds, write_fds;
+	fd_set read_fds;
 
 	char buffer[USERVER_BUFSIZE];
 	uproto_request_t request;
@@ -38,53 +95,62 @@ void *userver_proc(void *param) {
 
 	userver_t *userver = (userver_t *)param;
 
-	// create udp socket here
-	userver->socket = socket(AF_INET, SOCK_DGRAM, 0);
-	EXIT_IF_TRUE(userver->socket <= 0, "Cannot create socket\n");
-	
-	// bind the socket to port userver->port
-	memset(&saddr, '\0', sizeof(saddr));
-	saddr.sin_family = AF_INET;
-	saddr.sin_port = htons(userver->port);
-	saddr.sin_addr.s_addr = htonl(INADDR_ANY);
-	ret = bind(userver->socket, (struct sockaddr *)&saddr, sizeof(saddr));
-	EXIT_IF_TRUE(ret < 0, "Cannot bind socket to port\n");
+    first = userver->connect_str;
+    
+    second = strchr(first, ':');
+    EXIT_IF_TRUE(second == NULL, "Wrong connection string format\n");
+    *second = '\0';
+    second++;
+
+    if(0 == strcmp(first, "udp")) {
+        third = strchr(second, ':');
+        EXIT_IF_TRUE(third == NULL, "Wrong connection string format\n");
+        *third = '\0';
+        third++;
+        port = atoi(third);
+        open_udp_socket(userver, second, port);
+        userver->recv_f = &udp_recvfrom;
+        userver->send_f = &udp_sendto;
+    }
+    else if( 0 == strcmp(first, "tty") ) {
+        open_tty(userver, second);
+        userver->recv_f = &tty_recvfrom;
+        userver->send_f = &tty_sendto;
+    }
+    else {
+        EXIT_IF_TRUE(1, "Unsuported protocol\n");
+    }
 
 	// thread loop
+    timeout.tv_sec = 0;
+    timeout.tv_usec = 100 * 1000;
 	userver->is_end = 0;
-	timeout.tv_sec = 0;
-	timeout.tv_usec = 100 * 1000;
 	while( !userver->is_end ) {
 		FD_ZERO(&read_fds);
-		FD_ZERO(&write_fds);
-		FD_SET(userver->socket, &read_fds);
-		FD_SET(userver->socket, &write_fds);
-		ret = select(userver->socket + 1, &read_fds, &write_fds, NULL, &timeout); 
+		FD_SET(userver->fd, &read_fds);
+		ret = select(userver->fd + 1, &read_fds, NULL, NULL, &timeout); 
 		EXIT_IF_TRUE(ret < 0, "Error on server socket\n");
 
-		if( FD_ISSET(userver->socket, &read_fds) ) {
+		if( FD_ISSET(userver->fd, &read_fds) ) {
 			// read goes here
 			len = sizeof(caddr);
 			memset(&caddr, '\0', len);
-			ret = recvfrom(userver->socket, buffer, USERVER_BUFSIZE, 0, (struct sockaddr *)&caddr, &len);
+			ret = userver->recv_f(userver->fd, buffer, USERVER_BUFSIZE, (void *)&caddr, &len);
 			if( ret > 0 ) {
 				buffer[ret] = '\0';
 				printf("Received from client: %s\n", buffer);
 				userver->parse_request_f(buffer, ret, &request);
 			}
-			// processing request here
+
 			userver->on_request(userver, &request, &response);
 			
-			len = userver->build_response_f(buffer, sizeof(buffer), &response);
-
-			sendto(userver->socket, buffer, len, 0, (struct sockaddr *)&caddr, sizeof(struct sockaddr_in));
+            ret = userver->build_response_f(buffer, sizeof(buffer), &response);
+                
+            if( ret >= 0 ) {
+                userver->send_f(userver->fd, buffer, ret, (void *)&caddr, sizeof(struct sockaddr_in));
+            }
 		}
-		// if userver->socket is ready to write. When write finish, call userver->on_sent();
-	#if 0	
-		if( FD_ISSET(userver->socket, &write_fds) ) {
-			
-		}
-	#endif
+		// if userver->fd is ready to write. When write finish, call userver->on_sent();
 		// else --> time out
 	}
 	return NULL;
