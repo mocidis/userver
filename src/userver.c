@@ -6,17 +6,16 @@
 
 #include <termios.h>
 #include <fcntl.h>
-
-#include "userver.h"
-#include "proto.h"
-#include "ansi-utils.h"
 #include <sys/select.h>
 
-void userver_init(userver_t *userver, char *conn_str) {
+#include "$UPROTO$-server.h"
+#include "ansi-utils.h"
+
+void $UPROTO$_server_init($UPROTO$_server_t *userver, char *conn_str) {
     userver->connect_str = conn_str;
 }
 
-static void open_udp_socket(userver_t *userver, char *addr, int port) {
+static void open_udp_socket($UPROTO$_server_t *userver, char *addr, int port) {
 	struct sockaddr_in saddr;
     int ret;
     
@@ -35,7 +34,7 @@ static void open_udp_socket(userver_t *userver, char *addr, int port) {
 	EXIT_IF_TRUE(ret < 0, "Cannot bind socket to port\n");
 }
 
-static void open_tty(userver_t *userver, char *path) {
+static void open_tty($UPROTO$_server_t *userver, char *path) {
     struct termios options;
     
     userver->fd = open(path, O_RDWR | O_NOCTTY);
@@ -77,7 +76,7 @@ static int tty_sendto(int fd, char *buff, int len, void *data, unsigned int data
     return write(fd, buff, len);
 }
 #define USERVER_BUFSIZE 512
-void *userver_proc(void *param) {
+void *$UPROTO$_server_proc(void *param) {
 	int ret;
     unsigned int len;
     
@@ -90,10 +89,10 @@ void *userver_proc(void *param) {
 	fd_set read_fds;
 
 	char buffer[USERVER_BUFSIZE];
-	uproto_request_t request;
-	uproto_response_t response;
+	$UPROTO$_request_t request;
+	$UPROTO$_response_t response;
 
-	userver_t *userver = (userver_t *)param;
+	$UPROTO$_server_t *userver = ($UPROTO$_server_t *)param;
 
     first = userver->connect_str;
     
@@ -156,11 +155,11 @@ void *userver_proc(void *param) {
 	return NULL;
 }
 
-void userver_start(userver_t *userver) {
-	pthread_create(&userver->master_thread, NULL, userver_proc, userver);
+void $UPROTO$_server_start($UPROTO$_server_t *userver) {
+	pthread_create(&userver->master_thread, NULL, $UPROTO$_server_proc, userver);
 }
 
-void userver_end(userver_t *userver) {
+void $UPROTO$_server_end($UPROTO$_server_t *userver) {
 	userver->is_end = 1;
 	pthread_join(userver->master_thread, NULL);
 }

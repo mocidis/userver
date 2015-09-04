@@ -2,23 +2,22 @@
 #define __USERVER_CLIENT_H__
 
 #include <stdarg.h>
-#include "uproto.h"
-#include "proto.h"
+#include "$UPROTO$.h"
 
-typedef struct uclient_s uclient_t;
+typedef struct $UPROTO$_client_s $UPROTO$_client_t;
 
-struct uclient_s {
+struct $UPROTO$_client_s {
 	int fd;
 	char *connect_str;
     void *connect_data;
 	//struct sockaddr_in server_addr;
-	void (*parse_response_f)(char *buff, int len, uproto_response_t *resp);
+	void (*parse_response_f)(char *buff, int len, $UPROTO$_response_t *resp);
 	int (*build_request_f)(char *buff, int len, va_list argp);
 };
 
-void uclient_open(uclient_t *uclient, char *conn_str);
-int uclient_send(uclient_t *uclient,...);
-int uclient_recv(uclient_t *uclient, uproto_response_t *resp);
-void ucient_close(uclient_t *uclient);
+void $UPROTO$_client_open($UPROTO$_client_t *uclient, char *conn_str);
+int $UPROTO$_client_send($UPROTO$_client_t *uclient,...);
+int $UPROTO$_client_recv($UPROTO$_client_t *uclient, $UPROTO$_response_t *resp);
+void $UPROTO$_client_close($UPROTO$_client_t *uclient);
 
 #endif

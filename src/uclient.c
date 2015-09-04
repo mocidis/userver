@@ -8,12 +8,12 @@
 #include <arpa/inet.h>
 #include <stdarg.h>
 
-#include "uclient.h"
+#include "$UPROTO$-client.h"
 #include "ansi-utils.h"
 
 #define UCLIENT_BUFSIZE 512
 
-static void open_udp_socket(uclient_t *uclient, char *server, int port) {
+static void open_udp_socket($UPROTO$_client_t *uclient, char *server, int port) {
 	int ret;
     struct sockaddr_in *saddr;
 	// open socket
@@ -30,10 +30,10 @@ static void open_udp_socket(uclient_t *uclient, char *server, int port) {
 	EXIT_IF_TRUE(ret == 0, "Invalid server ip address\n");
 }
 
-static void open_tty(uclient_t *uclient, char *path) {
+static void open_tty($UPROTO$_client_t *uclient, char *path) {
 }
 
-void uclient_open(uclient_t *uclient, char *conn_str) {
+void $UPROTO$_client_open($UPROTO$_client_t *uclient, char *conn_str) {
     char *first, *second, *third;
     int port;
     uclient->connect_str = conn_str;
@@ -56,7 +56,7 @@ void uclient_open(uclient_t *uclient, char *conn_str) {
 
 }
 
-int uclient_send(uclient_t *uclient,...) {
+int $UPROTO$_client_send($UPROTO$_client_t *uclient,...) {
 	int n, ret;
 	va_list argp;
 	char buff[UCLIENT_BUFSIZE];
@@ -71,7 +71,7 @@ int uclient_send(uclient_t *uclient,...) {
 	return ret;
 }
 
-int uclient_recv(uclient_t *uclient, uproto_response_t *resp) {
+int $UPROTO$_client_recv($UPROTO$_client_t *uclient, $UPROTO$_response_t *resp) {
 	int n;
 	unsigned int len;
 	char buffer[UCLIENT_BUFSIZE];
@@ -87,7 +87,7 @@ int uclient_recv(uclient_t *uclient, uproto_response_t *resp) {
 	return n;
 }
 
-void ucient_close(uclient_t *uclient){
+void $UPROTO$_client_close($UPROTO$_client_t *uclient){
 	close(uclient->fd);
     free(uclient->connect_data);
 }
