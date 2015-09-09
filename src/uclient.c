@@ -6,8 +6,8 @@
 #include <netinet/in.h>
 #include <netinet/ip.h>
 #include <arpa/inet.h>
-#include <stdarg.h>
 
+#include "json.h"
 #include "$UPROTO$-client.h"
 #include "ansi-utils.h"
 
@@ -56,21 +56,17 @@ void $UPROTO$_client_open($UPROTO$_client_t *uclient, char *conn_str) {
 
 }
 
-int $UPROTO$_client_send($UPROTO$_client_t *uclient,...) {
-    int n, ret;
-    va_list argp;
-    char buff[UCLIENT_BUFSIZE];
-    va_start(argp, uclient);
-    
-    n = uclient->build_request_f(buff, sizeof(buff), argp);
-
-    va_end(argp);
-    
-    ret = sendto(uclient->fd, buff, n, 0, (struct sockaddr *)uclient->connect_data, sizeof(struct sockaddr_in));
-    
-    return ret;
+int $UPROTO$_client_send($UPROTO$_client_t *uclient, $UPROTO$_request_t *request) {
+	int n, ret;
+	char buff[UCLIENT_BUFSIZE];
+	
+	build_request(buff, sizeof(buff), request);
+	
+	ret = sendto(uclient->fd, buff, strlen(buff), 0, (struct sockaddr *)uclient->connect_data, sizeof(struct sockaddr_in));
+	
+	return ret;
 }
-
+/*
 int $UPROTO$_client_recv($UPROTO$_client_t *uclient, $UPROTO$_response_t *resp) {
     int n;
     unsigned int len;
@@ -86,7 +82,7 @@ int $UPROTO$_client_recv($UPROTO$_client_t *uclient, $UPROTO$_response_t *resp) 
 
     return n;
 }
-
+*/
 void $UPROTO$_client_close($UPROTO$_client_t *uclient){
     close(uclient->fd);
     free(uclient->connect_data);

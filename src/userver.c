@@ -8,14 +8,15 @@
 #include <fcntl.h>
 #include <sys/select.h>
 
+#include "json.h"
 #include "$UPROTO$-server.h"
 #include "ansi-utils.h"
 
 void $UPROTO$_server_init($UPROTO$_server_t *userver, char *conn_str) {
+    int ret;
     userver->connect_str = conn_str;
-    if (userver->on_init_done_f != NULL ) {
-        userver->on_init_done_f(userver);
-    }
+    ret = pthread_mutex_init(&userver->mutex, NULL);
+    EXIT_IF_TRUE(ret != 0, "Error creating mutex\n");
 }
 
 static void open_udp_socket($UPROTO$_server_t *userver, char *addr, int port) {
@@ -78,6 +79,7 @@ static int udp_sendto(int fd, char *buff, int len, void *data, unsigned int data
 static int tty_sendto(int fd, char *buff, int len, void *data, unsigned int data_len) {
     return write(fd, buff, len);
 }
+
 #define USERVER_BUFSIZE 512
 void *$UPROTO$_server_proc(void *param) {
     int ret;
@@ -91,9 +93,8 @@ void *$UPROTO$_server_proc(void *param) {
 
     fd_set read_fds;
 
-    char buffer[USERVER_BUFSIZE];
-    $UPROTO$_request_t request;
-    $UPROTO$_response_t response;
+	char buffer[USERVER_BUFSIZE];
+	$UPROTO$_request_t request;
 
     $UPROTO$_server_t *userver = ($UPROTO$_server_t *)param;
 
@@ -126,40 +127,64 @@ void *$UPROTO$_server_proc(void *param) {
     // thread loop
     timeout.tv_sec = 0;
     timeout.tv_usec = 100 * 1000;
-    userver->is_end = 0;
-    while( !userver->is_end ) {
-        FD_ZERO(&read_fds);
-        FD_SET(userver->fd, &read_fds);
-        ret = select(userver->fd + 1, &read_fds, NULL, NULL, &timeout); 
-        EXIT_IF_TRUE(ret < 0, "Error on server socket\n");
+	userver->is_end = 0;
+	while( !userver->is_end ) {
+		FD_ZERO(&read_fds);
+		FD_SET(userver->fd, &read_fds);
 
-        if( FD_ISSET(userver->fd, &read_fds) ) {
-            // read goes here
-            len = sizeof(caddr);
-            memset(&caddr, '\0', len);
-            ret = userver->recv_f(userver->fd, buffer, USERVER_BUFSIZE, (void *)&caddr, &len);
-            if( ret > 0 ) {
-                buffer[ret] = '\0';
-                printf("Received from client: %s\n", buffer);
-                userver->parse_request_f(buffer, ret, &request);
-            }
+        pthread_mutex_lock(&userver->mutex);
+		ret = select(userver->fd + 1, &read_fds, NULL, NULL, &timeout); 
+        pthread_mutex_unlock(&userver->mutex);
 
-            userver->on_request_f(userver, &request, &response);
-            
-            ret = userver->build_response_f(buffer, sizeof(buffer), &response);
-                
-            if( ret > 0 ) {
-                userver->send_f(userver->fd, buffer, ret, (void *)&caddr, sizeof(struct sockaddr_in));
-            }
-        }
-        // if userver->fd is ready to write. When write finish, call userver->on_sent();
-        // else --> time out
-    }
-    return NULL;
+		EXIT_IF_TRUE(ret < 0, "Error on server socket\n");
+
+		if( FD_ISSET(userver->fd, &read_fds) ) {
+			len = sizeof(caddr);
+			memset(&caddr, '\0', len);
+
+            pthread_mutex_lock(&userver->mutex);
+			ret = userver->recv_f(userver->fd, buffer, USERVER_BUFSIZE, (void *)&caddr, &len);
+            pthread_mutex_unlock(&userver->mutex);
+
+			if( ret > 0 ) {
+				buffer[ret] = '\0';
+				printf("Received from client: %s\n", buffer);
+				parse_request(buffer, ret, &request);
+                userver->on_request_f(userver, &request);
+			}
+		}
+		// if userver->fd is ready to write. When write finish, call userver->on_sent();
+		// else --> time out
+	}
+	return NULL;
 }
 
 void $UPROTO$_server_start($UPROTO$_server_t *userver) {
     pthread_create(&userver->master_thread, NULL, $UPROTO$_server_proc, userver);
+}
+
+void $UPROTO$_server_join($UPROTO$_server_t *userver, char *multicast_ip) {
+    struct ip_mreq mreq;
+    int ret;
+    mreq.imr_multiaddr.s_addr = inet_addr(multicast_ip);
+    mreq.imr_interface.s_addr = htonl(INADDR_ANY);
+
+    pthread_mutex_lock(&userver->mutex);
+    ret = setsockopt(userver->fd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq,sizeof(mreq));
+    EXIT_IF_TRUE(ret < 0, "Error in joining multicast group\n");
+    pthread_mutex_unlock(&userver->mutex);
+}
+
+void $UPROTO$_server_leave($UPROTO$_server_t *userver, char *multicast_ip) {
+    struct ip_mreq mreq;
+    int ret;
+    mreq.imr_multiaddr.s_addr = inet_addr(multicast_ip);
+    mreq.imr_interface.s_addr = htonl(INADDR_ANY);
+
+    pthread_mutex_lock(&userver->mutex);
+    ret = setsockopt(userver->fd, IPPROTO_IP, IP_DROP_MEMBERSHIP, &mreq,sizeof(mreq));
+    EXIT_IF_TRUE(ret < 0, "Error in joining multicast group\n");
+    pthread_mutex_unlock(&userver->mutex);
 }
 
 void $UPROTO$_server_end($UPROTO$_server_t *userver) {
