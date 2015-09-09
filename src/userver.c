@@ -13,25 +13,28 @@
 
 void $UPROTO$_server_init($UPROTO$_server_t *userver, char *conn_str) {
     userver->connect_str = conn_str;
+    if (userver->on_init_done_f != NULL ) {
+        userver->on_init_done_f(userver);
+    }
 }
 
 static void open_udp_socket($UPROTO$_server_t *userver, char *addr, int port) {
-	struct sockaddr_in saddr;
+    struct sockaddr_in saddr;
     int ret;
     
-	// create udp socket here
-	userver->fd = socket(AF_INET, SOCK_DGRAM, 0);
-	EXIT_IF_TRUE(userver->fd <= 0, "Cannot create socket\n");
-	
-	// bind the socket
-	memset(&saddr, '\0', sizeof(saddr));
-	saddr.sin_family = AF_INET;
-	saddr.sin_port = htons(port);
+    // create udp socket here
+    userver->fd = socket(AF_INET, SOCK_DGRAM, 0);
+    EXIT_IF_TRUE(userver->fd <= 0, "Cannot create socket\n");
+    
+    // bind the socket
+    memset(&saddr, '\0', sizeof(saddr));
+    saddr.sin_family = AF_INET;
+    saddr.sin_port = htons(port);
     ret = inet_aton(addr, &saddr.sin_addr);
     EXIT_IF_TRUE(ret==0, "Invalid ip address\n");
 
-	ret = bind(userver->fd, (struct sockaddr *)&saddr, sizeof(saddr));
-	EXIT_IF_TRUE(ret < 0, "Cannot bind socket to port\n");
+    ret = bind(userver->fd, (struct sockaddr *)&saddr, sizeof(saddr));
+    EXIT_IF_TRUE(ret < 0, "Cannot bind socket to port\n");
 }
 
 static void open_tty($UPROTO$_server_t *userver, char *path) {
@@ -77,22 +80,22 @@ static int tty_sendto(int fd, char *buff, int len, void *data, unsigned int data
 }
 #define USERVER_BUFSIZE 512
 void *$UPROTO$_server_proc(void *param) {
-	int ret;
+    int ret;
     unsigned int len;
     
     int port;
     char *first, *second, *third;
 
-	struct sockaddr_in caddr;
-	struct timeval timeout;
+    struct sockaddr_in caddr;
+    struct timeval timeout;
 
-	fd_set read_fds;
+    fd_set read_fds;
 
-	char buffer[USERVER_BUFSIZE];
-	$UPROTO$_request_t request;
-	$UPROTO$_response_t response;
+    char buffer[USERVER_BUFSIZE];
+    $UPROTO$_request_t request;
+    $UPROTO$_response_t response;
 
-	$UPROTO$_server_t *userver = ($UPROTO$_server_t *)param;
+    $UPROTO$_server_t *userver = ($UPROTO$_server_t *)param;
 
     first = userver->connect_str;
     
@@ -120,46 +123,46 @@ void *$UPROTO$_server_proc(void *param) {
         EXIT_IF_TRUE(1, "Unsuported protocol\n");
     }
 
-	// thread loop
+    // thread loop
     timeout.tv_sec = 0;
     timeout.tv_usec = 100 * 1000;
-	userver->is_end = 0;
-	while( !userver->is_end ) {
-		FD_ZERO(&read_fds);
-		FD_SET(userver->fd, &read_fds);
-		ret = select(userver->fd + 1, &read_fds, NULL, NULL, &timeout); 
-		EXIT_IF_TRUE(ret < 0, "Error on server socket\n");
+    userver->is_end = 0;
+    while( !userver->is_end ) {
+        FD_ZERO(&read_fds);
+        FD_SET(userver->fd, &read_fds);
+        ret = select(userver->fd + 1, &read_fds, NULL, NULL, &timeout); 
+        EXIT_IF_TRUE(ret < 0, "Error on server socket\n");
 
-		if( FD_ISSET(userver->fd, &read_fds) ) {
-			// read goes here
-			len = sizeof(caddr);
-			memset(&caddr, '\0', len);
-			ret = userver->recv_f(userver->fd, buffer, USERVER_BUFSIZE, (void *)&caddr, &len);
-			if( ret > 0 ) {
-				buffer[ret] = '\0';
-				printf("Received from client: %s\n", buffer);
-				userver->parse_request_f(buffer, ret, &request);
-			}
+        if( FD_ISSET(userver->fd, &read_fds) ) {
+            // read goes here
+            len = sizeof(caddr);
+            memset(&caddr, '\0', len);
+            ret = userver->recv_f(userver->fd, buffer, USERVER_BUFSIZE, (void *)&caddr, &len);
+            if( ret > 0 ) {
+                buffer[ret] = '\0';
+                printf("Received from client: %s\n", buffer);
+                userver->parse_request_f(buffer, ret, &request);
+            }
 
-			userver->on_request(userver, &request, &response);
-			
+            userver->on_request_f(userver, &request, &response);
+            
             ret = userver->build_response_f(buffer, sizeof(buffer), &response);
                 
-            if( ret >= 0 ) {
+            if( ret > 0 ) {
                 userver->send_f(userver->fd, buffer, ret, (void *)&caddr, sizeof(struct sockaddr_in));
             }
-		}
-		// if userver->fd is ready to write. When write finish, call userver->on_sent();
-		// else --> time out
-	}
-	return NULL;
+        }
+        // if userver->fd is ready to write. When write finish, call userver->on_sent();
+        // else --> time out
+    }
+    return NULL;
 }
 
 void $UPROTO$_server_start($UPROTO$_server_t *userver) {
-	pthread_create(&userver->master_thread, NULL, $UPROTO$_server_proc, userver);
+    pthread_create(&userver->master_thread, NULL, $UPROTO$_server_proc, userver);
 }
 
 void $UPROTO$_server_end($UPROTO$_server_t *userver) {
-	userver->is_end = 1;
-	pthread_join(userver->master_thread, NULL);
+    userver->is_end = 1;
+    pthread_join(userver->master_thread, NULL);
 }
