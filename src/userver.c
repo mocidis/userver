@@ -17,6 +17,8 @@ void $UPROTO$_server_init($UPROTO$_server_t *userver, char *conn_str) {
     userver->connect_str = conn_str;
     ret = pthread_mutex_init(&userver->mutex, NULL);
     EXIT_IF_TRUE(ret != 0, "Error creating mutex\n");
+    if (userver->on_init_done_f != NULL)
+        userver->on_init_done_f(userver);
 }
 
 static void open_udp_socket($UPROTO$_server_t *userver, char *addr, int port) {
@@ -112,6 +114,9 @@ void *$UPROTO$_server_proc(void *param) {
         third++;
         port = atoi(third);
         open_udp_socket(userver, second, port);
+        if (userver->on_open_socket_f != NULL)
+            userver->on_open_socket_f(userver);
+
         userver->recv_f = &udp_recvfrom;
         userver->send_f = &udp_sendto;
     }
@@ -149,7 +154,7 @@ void *$UPROTO$_server_proc(void *param) {
 			if( ret > 0 ) {
 				buffer[ret] = '\0';
 				printf("Received from client: %s\n", buffer);
-				parse_request(buffer, ret, &request);
+				$UPROTO$_parse_request(buffer, ret, &request);
                 userver->on_request_f(userver, &request);
 			}
 		}

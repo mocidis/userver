@@ -6,7 +6,7 @@ function replace(ifile, ofile, proto_name) {
 }
 function gen_parse_request_specific(messages, fieldtypes, sfile, hfile) {
     for (m in messages) {
-    print "void parse_"m"(json_object *jobj, char *buffer, int len, "proto"_request_t *request) {" >> sfile;
+    print "void "proto"_parse_"m"(json_object *jobj, char *buffer, int len, "proto"_request_t *request) {" >> sfile;
     print "    json_object_object_foreach(jobj, key, val) {" >> sfile;
         has_else = 0;
         for (p in fieldtypes) {
@@ -32,8 +32,8 @@ function gen_parse_request_specific(messages, fieldtypes, sfile, hfile) {
     }
 }
 function gen_parse_request(messages, fieldtypes, sfile, hfile) {
-    print "void parse_request(char *buffer, int len, "proto"_request_t *request);" >> hfile;
-    print "void parse_request(char *buffer, int len, "proto"_request_t *request) {" >> sfile;
+    print "void "proto"_parse_request(char *buffer, int len, "proto"_request_t *request);" >> hfile;
+    print "void "proto"_parse_request(char *buffer, int len, "proto"_request_t *request) {" >> sfile;
     print "    json_object *jobj, *jvalue;" >> sfile;
     print "    int msg_id;" >> sfile;
     print "    buffer[len] = '\\0';" >> sfile;
@@ -45,19 +45,19 @@ function gen_parse_request(messages, fieldtypes, sfile, hfile) {
     
     for (m in messages) {
     print "    case "toupper(m)":" >> sfile;
-    print "        parse_"m"(jobj, buffer, len, request);" >> sfile;
+    print "        "proto"_parse_"m"(jobj, buffer, len, request);" >> sfile;
     print "        break;" >> sfile;
     }
 
     print "    default:" >> sfile;
-    print "        fprintf(stderr, \"parse_request(): Invalid msg_id; %d\\n\", msg_id);" >> sfile;
+    print "        fprintf(stderr, \""proto"_parse_request(): Invalid msg_id; %d\\n\", msg_id);" >> sfile;
     print "        exit(-1);" >> sfile;
     print "    }" >> sfile;
     print "}" >> sfile;
 }
 function gen_build_request_specific(messages, fieldtypes, sfile, hfile) {
     for (m in messages) {
-    print "void build_"m"(json_object *jobj, "proto"_request_t *request) {" >> sfile;
+    print "void "proto"_build_"m"(json_object *jobj, "proto"_request_t *request) {" >> sfile;
         for (p in fieldtypes) {
             if (fieldrequests[p] == m) {
                 if(fieldtypes[p] == "char") {
@@ -72,8 +72,8 @@ function gen_build_request_specific(messages, fieldtypes, sfile, hfile) {
     }
 }
 function gen_build_request(messages, fieldtypes, sfile, hfile) {
-    print "void build_request(char *buffer, int len, "proto"_request_t *request);" >> hfile;
-    print "void build_request(char *buffer, int len, "proto"_request_t *request) {" >> sfile;
+    print "void "proto"_build_request(char *buffer, int len, "proto"_request_t *request);" >> hfile;
+    print "void "proto"_build_request(char *buffer, int len, "proto"_request_t *request) {" >> sfile;
     print "    json_object *jobj;" >> sfile;
     print "    jobj = json_object_new_object();" >> sfile;
     print "    json_object_object_add(jobj, \"msg_id\", json_object_new_int(request->msg_id));" >> sfile;
@@ -81,12 +81,12 @@ function gen_build_request(messages, fieldtypes, sfile, hfile) {
 
     for (m in messages) {
     print "    case " toupper(m) ":" >> sfile;
-    print "        build_"m"(jobj, request);" >> sfile;
+    print "        "proto"_build_"m"(jobj, request);" >> sfile;
     print "        break;" >> sfile;
     }
 
     print "    default:" >> sfile;
-    print "        fprintf(stderr, \"build_request():Invalid msg_id: %d\\n\", request->msg_id);" >> sfile;
+    print "        fprintf(stderr, \""proto"_build_request():Invalid msg_id: %d\\n\", request->msg_id);" >> sfile;
     print "        exit(-1);" >> sfile;
 
     print "    }" >> sfile;

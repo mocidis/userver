@@ -57,10 +57,10 @@ void $UPROTO$_client_open($UPROTO$_client_t *uclient, char *conn_str) {
 }
 
 int $UPROTO$_client_send($UPROTO$_client_t *uclient, $UPROTO$_request_t *request) {
-	int n, ret;
+	int ret;
 	char buff[UCLIENT_BUFSIZE];
 	
-	build_request(buff, sizeof(buff), request);
+	$UPROTO$_build_request(buff, sizeof(buff), request);
 	
 	ret = sendto(uclient->fd, buff, strlen(buff), 0, (struct sockaddr *)uclient->connect_data, sizeof(struct sockaddr_in));
 	
