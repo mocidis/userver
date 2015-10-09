@@ -158,6 +158,7 @@ void *$UPROTO$_server_proc(void *param) {
                 userver->on_request_f(userver, &request);
 			}
 		}
+        usleep(100*1000);
 		// if userver->fd is ready to write. When write finish, call userver->on_sent();
 		// else --> time out
 	}
