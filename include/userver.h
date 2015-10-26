@@ -15,6 +15,8 @@ struct $UPROTO$_server_s {
     void (*on_init_done_f)($UPROTO$_server_t *userver);
     void (*on_open_socket_f)($UPROTO$_server_t *userver);
     void *user_data;
+
+    int is_online;
 };
 
 void $UPROTO$_server_init($UPROTO$_server_t *userver, char *conn_str);

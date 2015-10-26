@@ -15,6 +15,7 @@
 void $UPROTO$_server_init($UPROTO$_server_t *userver, char *conn_str) {
     int ret;
     userver->connect_str = conn_str;
+    userver->is_online = 1;
     ret = pthread_mutex_init(&userver->mutex, NULL);
     EXIT_IF_TRUE(ret != 0, "Error creating mutex\n");
     if (userver->on_init_done_f != NULL)
@@ -23,12 +24,16 @@ void $UPROTO$_server_init($UPROTO$_server_t *userver, char *conn_str) {
 
 static void open_udp_socket($UPROTO$_server_t *userver, char *addr, int port) {
     struct sockaddr_in saddr;
-    int ret;
+    int ret, optval = 1;
     
     // create udp socket here
     userver->fd = socket(AF_INET, SOCK_DGRAM, 0);
     EXIT_IF_TRUE(userver->fd <= 0, "Cannot create socket\n");
-    
+
+    // Allow socket reuse
+    ret = setsockopt(userver->fd, SOL_SOCKET, SO_REUSEPORT, &optval, sizeof(optval));
+    EXIT_IF_TRUE(ret < 0, "Cannot set socket option for SO_REUSEPORT\n");
+
     // bind the socket
     memset(&saddr, '\0', sizeof(saddr));
     saddr.sin_family = AF_INET;
@@ -132,32 +137,40 @@ void *$UPROTO$_server_proc(void *param) {
     // thread loop
     timeout.tv_sec = 0;
     timeout.tv_usec = 100 * 1000;
-	userver->is_end = 0;
-	while( !userver->is_end ) {
-		FD_ZERO(&read_fds);
-		FD_SET(userver->fd, &read_fds);
+    userver->is_end = 0;
+
+
+    while( !userver->is_end ) {
+
+        while (!userver->is_online) {
+            SHOW_LOG(3, fprintf(stdout, "Server is currently offline...\n"));
+            usleep(8*1000*1000);
+        }
+
+        FD_ZERO(&read_fds);
+        FD_SET(userver->fd, &read_fds);
 
         pthread_mutex_lock(&userver->mutex);
-		ret = select(userver->fd + 1, &read_fds, NULL, NULL, &timeout); 
-        pthread_mutex_unlock(&userver->mutex);
-
-		EXIT_IF_TRUE(ret < 0, "Error on server socket\n");
-
-		if( FD_ISSET(userver->fd, &read_fds) ) {
-			len = sizeof(caddr);
-			memset(&caddr, '\0', len);
-
-            pthread_mutex_lock(&userver->mutex);
-			ret = userver->recv_f(userver->fd, buffer, USERVER_BUFSIZE, (void *)&caddr, &len);
+        ret = select(userver->fd + 1, &read_fds, NULL, NULL, &timeout); 
             pthread_mutex_unlock(&userver->mutex);
 
-			if( ret > 0 ) {
-				buffer[ret] = '\0';
-				printf("Received from client: %s\n", buffer);
-				$UPROTO$_parse_request(buffer, ret, &request);
-                userver->on_request_f(userver, &request);
-			}
-		}
+            EXIT_IF_TRUE(ret < 0, "Error on server socket\n");
+
+            if( FD_ISSET(userver->fd, &read_fds) ) {
+                len = sizeof(caddr);
+                memset(&caddr, '\0', len);
+
+                pthread_mutex_lock(&userver->mutex);
+                ret = userver->recv_f(userver->fd, buffer, USERVER_BUFSIZE, (void *)&caddr, &len);
+                pthread_mutex_unlock(&userver->mutex);
+
+                if( ret > 0 ) {
+                    buffer[ret] = '\0';
+                    SHOW_LOG(5, fprintf(stdout, "Received from client: %s\n", buffer));
+                    $UPROTO$_parse_request(buffer, ret, &request);
+                    userver->on_request_f(userver, &request);
+                }
+            }
         usleep(100*1000);
 		// if userver->fd is ready to write. When write finish, call userver->on_sent();
 		// else --> time out
