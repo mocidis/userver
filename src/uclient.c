@@ -35,8 +35,12 @@ static void open_tty($UPROTO$_client_t *uclient, char *path) {
 
 void $UPROTO$_client_open($UPROTO$_client_t *uclient, char *conn_str) {
     char *first, *second, *third;
-    int port;
-    uclient->connect_str = conn_str;
+    int len, port;
+    memset(uclient->connect_str, 0, sizeof(uclient->connect_str));
+    strncpy(uclient->connect_str, conn_str, strlen(conn_str));
+    len = strlen(uclient->connect_str);
+    uclient->connect_str[len] = '\0';
+
     first = conn_str;
     second = strchr(first, ':');
     EXIT_IF_TRUE(second == NULL, "Invalid connection string\n");

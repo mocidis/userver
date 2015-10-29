@@ -5,7 +5,7 @@ typedef struct $UPROTO$_client_s $UPROTO$_client_t;
 
 struct $UPROTO$_client_s {
 	int fd;
-	char *connect_str;
+	char connect_str[30];
     void *connect_data;
 };
 
