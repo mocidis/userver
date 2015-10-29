@@ -30,9 +30,11 @@ static void open_udp_socket($UPROTO$_server_t *userver, char *addr, int port) {
     userver->fd = socket(AF_INET, SOCK_DGRAM, 0);
     EXIT_IF_TRUE(userver->fd <= 0, "Cannot create socket\n");
 
+#ifdef __ICS_INTEL__
     // Allow socket reuse
     ret = setsockopt(userver->fd, SOL_SOCKET, SO_REUSEPORT, &optval, sizeof(optval));
     EXIT_IF_TRUE(ret < 0, "Cannot set socket option for SO_REUSEPORT\n");
+#endif
 
     // bind the socket
     memset(&saddr, '\0', sizeof(saddr));
