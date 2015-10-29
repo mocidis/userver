@@ -192,7 +192,7 @@ void $UPROTO$_server_join($UPROTO$_server_t *userver, char *multicast_ip) {
 
     pthread_mutex_lock(&userver->mutex);
     ret = setsockopt(userver->fd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq,sizeof(mreq));
-    EXIT_IF_TRUE(ret < 0, "Error in joining multicast group\n");
+    PERROR_IF_TRUE(ret < 0, "Error in joining mcast group");
     pthread_mutex_unlock(&userver->mutex);
 }
 
@@ -204,7 +204,7 @@ void $UPROTO$_server_leave($UPROTO$_server_t *userver, char *multicast_ip) {
 
     pthread_mutex_lock(&userver->mutex);
     ret = setsockopt(userver->fd, IPPROTO_IP, IP_DROP_MEMBERSHIP, &mreq,sizeof(mreq));
-    EXIT_IF_TRUE(ret < 0, "Error in joining multicast group\n");
+    PERROR_IF_TRUE(ret < 0, "Error in joining mcast group");
     pthread_mutex_unlock(&userver->mutex);
 }
 
