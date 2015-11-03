@@ -96,6 +96,7 @@ void *$UPROTO$_server_proc(void *param) {
     
     int port;
     char *first, *second, *third;
+    char cnt_str[30];
 
     struct sockaddr_in caddr;
     struct timeval timeout;
@@ -107,7 +108,11 @@ void *$UPROTO$_server_proc(void *param) {
 
     $UPROTO$_server_t *userver = ($UPROTO$_server_t *)param;
 
-    first = userver->connect_str;
+    strncpy(cnt_str, userver->connect_str, strlen(userver->connect_str));
+    len = strlen(cnt_str);
+    cnt_str[len] = '\0';
+
+    first = cnt_str;
     
     second = strchr(first, ':');
     EXIT_IF_TRUE(second == NULL, "Wrong connection string format\n");
