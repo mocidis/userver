@@ -36,6 +36,7 @@ static void open_tty($UPROTO$_client_t *uclient, char *path) {
 void $UPROTO$_client_open($UPROTO$_client_t *uclient, char *conn_str) {
     char *first, *second, *third;
     int len, port;
+
     memset(uclient->connect_str, 0, sizeof(uclient->connect_str));
     strncpy(uclient->connect_str, conn_str, strlen(conn_str));
     len = strlen(uclient->connect_str);
