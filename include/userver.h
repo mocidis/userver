@@ -7,7 +7,7 @@ struct $UPROTO$_server_s {
     int fd;
     pthread_t master_thread;
     pthread_mutex_t mutex;
-    char *connect_str;
+    char connect_str[30];
     volatile int is_end;
     int (*recv_f)(int fd, char *buff, int len, void *data, unsigned int *data_len);
     int (*send_f)(int fd, char *buff, int len, void *data, unsigned int data_len);
