@@ -14,7 +14,7 @@
 
 void $UPROTO$_server_init($UPROTO$_server_t *userver, char *conn_str) {
     int ret;
-    userver->connect_str = conn_str;
+    ansi_copy_str(userver->connect_str, conn_str);
     userver->is_online = 1;
     ret = pthread_mutex_init(&userver->mutex, NULL);
     EXIT_IF_TRUE(ret != 0, "Error creating mutex\n");
@@ -107,7 +107,6 @@ void *$UPROTO$_server_proc(void *param) {
 	$UPROTO$_request_t request;
 
     $UPROTO$_server_t *userver = ($UPROTO$_server_t *)param;
-
     strncpy(cnt_str, userver->connect_str, strlen(userver->connect_str));
     len = strlen(cnt_str);
     cnt_str[len] = '\0';
