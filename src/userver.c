@@ -108,7 +108,6 @@ void *$UPROTO$_server_proc(void *param) {
     strncpy(cnt_str, userver->connect_str, strlen(userver->connect_str));
     len = strlen(cnt_str);
     cnt_str[len] = '\0';
-
     first = cnt_str;
     
     second = strchr(first, ':');
@@ -206,7 +205,7 @@ void $UPROTO$_server_leave($UPROTO$_server_t *userver, char *multicast_ip) {
 
     pthread_mutex_lock(&userver->mutex);
     ret = setsockopt(userver->fd, IPPROTO_IP, IP_DROP_MEMBERSHIP, &mreq,sizeof(mreq));
-    PERROR_IF_TRUE(ret < 0, "Error in joining mcast group");
+    PERROR_IF_TRUE(ret < 0, "Error in leaving mcast group");
     pthread_mutex_unlock(&userver->mutex);
 }
 
