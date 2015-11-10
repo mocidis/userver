@@ -99,6 +99,7 @@ void *$UPROTO$_server_proc(void *param) {
     char cnt_str[30];
 
     struct sockaddr_in caddr;
+    char *caddr_str;
     struct timeval timeout;
 
     fd_set read_fds;
@@ -157,29 +158,30 @@ void *$UPROTO$_server_proc(void *param) {
 
         pthread_mutex_lock(&userver->mutex);
         ret = select(userver->fd + 1, &read_fds, NULL, NULL, &timeout); 
+        pthread_mutex_unlock(&userver->mutex);
+
+        EXIT_IF_TRUE(ret < 0, "Error on server socket\n");
+
+        if( FD_ISSET(userver->fd, &read_fds) ) {
+            len = sizeof(caddr);
+            memset(&caddr, '\0', len);
+
+            pthread_mutex_lock(&userver->mutex);
+            ret = userver->recv_f(userver->fd, buffer, USERVER_BUFSIZE, (void *)&caddr, &len);
             pthread_mutex_unlock(&userver->mutex);
+            caddr_str = inet_ntoa(caddr.sin_addr);
 
-            EXIT_IF_TRUE(ret < 0, "Error on server socket\n");
-
-            if( FD_ISSET(userver->fd, &read_fds) ) {
-                len = sizeof(caddr);
-                memset(&caddr, '\0', len);
-
-                pthread_mutex_lock(&userver->mutex);
-                ret = userver->recv_f(userver->fd, buffer, USERVER_BUFSIZE, (void *)&caddr, &len);
-                pthread_mutex_unlock(&userver->mutex);
-
-                if( ret > 0 ) {
-                    buffer[ret] = '\0';
-                    SHOW_LOG(5, fprintf(stdout, "Received from client: %s\n", buffer));
-                    $UPROTO$_parse_request(buffer, ret, &request);
-                    userver->on_request_f(userver, &request);
-                }
+            if( ret > 0 ) {
+                buffer[ret] = '\0';
+                SHOW_LOG(5, fprintf(stdout, "Received from client: %s\n", buffer));
+                $UPROTO$_parse_request(buffer, ret, &request);
+                userver->on_request_f(userver, &request, caddr_str);
             }
+        }
         usleep(100*1000);
-		// if userver->fd is ready to write. When write finish, call userver->on_sent();
-		// else --> time out
-	}
+        // if userver->fd is ready to write. When write finish, call userver->on_sent();
+        // else --> time out
+    }
 	return NULL;
 }
 
