@@ -149,7 +149,7 @@ void *$UPROTO$_server_proc(void *param) {
     while( !userver->is_end ) {
 
         while (!userver->is_online) {
-            SHOW_LOG(3, fprintf(stdout, "Server is currently offline...\n"));
+            SHOW_LOG(3, "Server is currently offline...\n");
             usleep(8*1000*1000);
         }
 
@@ -173,7 +173,7 @@ void *$UPROTO$_server_proc(void *param) {
 
             if( ret > 0 ) {
                 buffer[ret] = '\0';
-                SHOW_LOG(5, fprintf(stdout, "Received from client: %s\n", buffer));
+                SHOW_LOG(5, "Received from client: %s\n", buffer);
                 $UPROTO$_parse_request(buffer, ret, &request);
                 userver->on_request_f(userver, &request, caddr_str);
             }
