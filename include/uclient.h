@@ -1,10 +1,11 @@
 #include <stdarg.h>
+#include <pjlib.h>
 #include "$UPROTO$.h"
 
 typedef struct $UPROTO$_client_s $UPROTO$_client_t;
 
 struct $UPROTO$_client_s {
-	int fd;
+	pj_sock_t fd;
 	char connect_str[30];
     void *connect_data;
 };

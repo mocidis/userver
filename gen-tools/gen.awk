@@ -94,7 +94,9 @@ function gen_build_request(messages, fieldtypes, sfile, hfile) {
     print "    json_object_put(jobj);" >> sfile;
     print "}" >> sfile;
 }
-
+BEGIN {
+    base_dir=ARGV[2]
+}
 /^BEGIN/ {
     proto=$2;
     protofile="gen/"proto".h";
@@ -141,14 +143,21 @@ END {
 
     print "#ifndef __" toupper(proto) "_SERVER_H__" > userver_h;
     print "#define __" toupper(proto) "_SERVER_H__" >> userver_h;
+#    print "#include \"" proto ".h\"" >> userver_h;
 
     print "#ifndef __" toupper(proto) "_CLIENT_H__" > uclient_h;
     print "#define __" toupper(proto) "_CLIENT_H__" >> uclient_h;
+#    print "#include \"" proto ".h\"" >> uclient_h;
 
-    replace("../userver/include/userver.h", userver_h, proto);
-    replace("../userver/include/uclient.h", uclient_h, proto);
-    replace("../userver/src/userver.c", userver_c, proto);
-    replace("../userver/src/uclient.c", uclient_c, proto);
+    replace(base_dir"/include/userver.h", userver_h, proto);
+    replace(base_dir"/include/uclient.h", uclient_h, proto);
+    replace(base_dir"/src/userver.c", userver_c, proto);
+    replace(base_dir"/src/uclient.c", uclient_c, proto);
+
+#    replace("../userver/include/userver.h", userver_h, proto);
+#    replace("../userver/include/uclient.h", uclient_h, proto);
+#    replace("../userver/src/userver.c", userver_c, proto);
+#    replace("../userver/src/uclient.c", uclient_c, proto);
 
     gen_parse_request_specific(messages, fieldtypes, userver_c, userver_h);
     gen_parse_request(messages, fieldtypes, userver_c, userver_h);

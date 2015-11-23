@@ -2,35 +2,39 @@
 #include <unistd.h>
 #include <string.h>
 
+#if 0
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netinet/ip.h>
 #include <arpa/inet.h>
+#endif
+
+#include "pjlib.h"
 
 #include "json.h"
 #include "$UPROTO$-client.h"
+#include "my-pjlib-utils.h"
 #include "ansi-utils.h"
 
 #define UCLIENT_BUFSIZE 512
 
 static void open_udp_socket($UPROTO$_client_t *uclient, char *server, int port) {
-    int ret;
-    struct sockaddr_in *saddr;
+    pj_sockaddr_in *saddr;
+    pj_str_t s;
     // open socket
-    uclient->fd = socket(AF_INET, SOCK_DGRAM, 0);
-    EXIT_IF_TRUE(uclient->fd <= 0, "Error creating socket\n");
+    CHECK(__FILE__, pj_sock_socket(PJ_AF_INET, PJ_SOCK_DGRAM, 0, &uclient->fd));
 
-    uclient->connect_data = malloc(sizeof(struct sockaddr_in));
-    saddr = (struct sockaddr_in *)uclient->connect_data;
-    memset((void *)saddr, '\0', sizeof(struct sockaddr_in));
-    saddr->sin_family = AF_INET;
-    saddr->sin_port = htons(port);
-    ret = inet_aton(server, &saddr->sin_addr);
-
-    EXIT_IF_TRUE(ret == 0, "Invalid server ip address\n");
+    uclient->connect_data = malloc(sizeof(pj_sockaddr_in));
+    saddr = (pj_sockaddr_in *)uclient->connect_data;
+    pj_bzero((void *)saddr, sizeof(pj_sockaddr_in));
+    saddr->sin_family = PJ_AF_INET;
+    saddr->sin_port = pj_htons(port);
+    saddr->sin_addr = pj_inet_addr(pj_cstr(&s, server));
 }
 
 static void open_tty($UPROTO$_client_t *uclient, char *path) {
+    (void) uclient;
+    (void) path;
 }
 
 void $UPROTO$_client_open($UPROTO$_client_t *uclient, char *conn_str) {
@@ -63,13 +67,20 @@ void $UPROTO$_client_open($UPROTO$_client_t *uclient, char *conn_str) {
 
 int $UPROTO$_client_send($UPROTO$_client_t *uclient, $UPROTO$_request_t *request) {
 	int ret;
+    long nbytes;
 	char buff[UCLIENT_BUFSIZE];
 	
 	$UPROTO$_build_request(buff, sizeof(buff), request);
 	
-	ret = sendto(uclient->fd, buff, strlen(buff), 0, (struct sockaddr *)uclient->connect_data, sizeof(struct sockaddr_in));
-	
-	return ret;
+    nbytes = strlen(buff);
+	ret = pj_sock_sendto(uclient->fd, buff, &nbytes, 0, (const pj_sockaddr_t *)uclient->connect_data, sizeof(pj_sockaddr_in));
+
+    if(ret != 0) {
+        PERROR_IF_TRUE(1, "Error in sending data\n");
+        return -1;
+    }
+
+	return nbytes;
 }
 /*
 int $UPROTO$_client_recv($UPROTO$_client_t *uclient, $UPROTO$_response_t *resp) {
@@ -89,7 +100,7 @@ int $UPROTO$_client_recv($UPROTO$_client_t *uclient, $UPROTO$_response_t *resp) 
 }
 */
 void $UPROTO$_client_close($UPROTO$_client_t *uclient){
-    close(uclient->fd);
+    pj_sock_close(uclient->fd);
     free(uclient->connect_data);
 }
 

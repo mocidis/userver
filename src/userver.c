@@ -1,53 +1,64 @@
+#if 0
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netinet/ip.h>
 #include <arpa/inet.h>
+#endif
+
 #include <stdarg.h>
 
+#if 0
 #include <termios.h>
 #include <fcntl.h>
 #include <sys/select.h>
+#endif
 
 #include "json.h"
 #include "$UPROTO$-server.h"
 #include "ansi-utils.h"
-
-void $UPROTO$_server_init($UPROTO$_server_t *userver, char *conn_str) {
-    int ret;
+#include "my-pjlib-utils.h"
+void $UPROTO$_server_init($UPROTO$_server_t *userver, char *conn_str, pj_pool_t *pool) {
+    userver->pool = pool;
     ansi_copy_str(userver->connect_str, conn_str);
     userver->is_online = 1;
-    ret = pthread_mutex_init(&userver->mutex, NULL);
-    EXIT_IF_TRUE(ret != 0, "Error creating mutex\n");
+    //ret = pthread_mutex_init(&userver->mutex, NULL);
+    //EXIT_IF_TRUE(ret != 0, "Error creating mutex\n");
+    CHECK(__FILE__, pj_mutex_create_simple(pool, "", &userver->mutex));
     if (userver->on_init_done_f != NULL)
         userver->on_init_done_f(userver);
 }
 
 static void open_udp_socket($UPROTO$_server_t *userver, char *addr, int port) {
-    struct sockaddr_in saddr;
-    int ret, optval = 1;
-    
+    pj_sockaddr_in saddr;
+    pj_str_t s;
+    int optval = 1;
+    SHOW_LOG(3, __FILE__":open_udp_socket: %s:%d\n", addr, port);   
     // create udp socket here
-    userver->fd = socket(AF_INET, SOCK_DGRAM, 0);
-    EXIT_IF_TRUE(userver->fd <= 0, "Cannot create socket\n");
+    CHECK(__FILE__, pj_sock_socket(PJ_AF_INET, PJ_SOCK_DGRAM, 0, &userver->fd));
 
 #ifdef __ICS_INTEL__
     // Allow socket reuse
-    ret = setsockopt(userver->fd, SOL_SOCKET, SO_REUSEPORT, &optval, sizeof(optval));
-    EXIT_IF_TRUE(ret < 0, "Cannot set socket option for SO_REUSEPORT\n");
+    CHECK(__FILE__, pj_sock_setsockopt(userver->fd, PJ_SOL_SOCKET, PJ_SO_REUSEADDR, &optval, sizeof(optval)));
 #endif
 
     // bind the socket
-    memset(&saddr, '\0', sizeof(saddr));
-    saddr.sin_family = AF_INET;
-    saddr.sin_port = htons(port);
-    ret = inet_aton(addr, &saddr.sin_addr);
-    EXIT_IF_TRUE(ret==0, "Invalid ip address\n");
+    pj_bzero(&saddr, sizeof(saddr));
+    saddr.sin_family = PJ_AF_INET;
+    saddr.sin_port = pj_htons(port);
+    saddr.sin_addr = pj_inet_addr(pj_cstr(&s,addr));
 
-    ret = bind(userver->fd, (struct sockaddr *)&saddr, sizeof(saddr));
-    EXIT_IF_TRUE(ret < 0, "Cannot bind socket to port\n");
+    /*pj_status_t status = pj_sock_bind(userver->fd, &saddr, sizeof(saddr));
+    if( status != 0 ) {
+        SHOW_LOG(1, __FILE__":open_udp_socket error(%d)\n", status);
+        exit(-1);
+    }*/
+    CHECK(__FILE__, pj_sock_bind(userver->fd, &saddr, sizeof(saddr)));
 }
 
 static void open_tty($UPROTO$_server_t *userver, char *path) {
+    (void)userver;
+    (void)path;
+#if 0
     struct termios options;
     
     userver->fd = open(path, O_RDWR | O_NOCTTY);
@@ -71,26 +82,45 @@ static void open_tty($UPROTO$_server_t *userver, char *path) {
     options.c_cc[VTIME] = 2; // measured in 0.1 second
 
     tcsetattr(userver->fd, TCSANOW, &options);
+#endif
 }
 
 static int udp_recvfrom(int fd, char *buff, int len, void *data, unsigned int *data_len) {
-    return recvfrom(fd, buff, len, 0, (struct sockaddr *)data, data_len);
+    int ret;
+    long nbytes = len;
+    ret = pj_sock_recvfrom(fd, buff, &nbytes, 0, (pj_sockaddr_t *)data, (int *)data_len);
+    if( ret != 0 ) {
+        PERROR_IF_TRUE(1, "Error receiving data\n");
+        return -1;
+    }
+    return nbytes;
 }
 
 static int tty_recvfrom(int fd, char *buff, int len, void *data, unsigned int *data_len) {
-    return read(fd, buff, len);
+    (void)fd, (void) buff, (void) len, (void)data, (void)data_len;
+    return -1;
+    //return read(fd, buff, len);
 }
 
 static int udp_sendto(int fd, char *buff, int len, void *data, unsigned int data_len) {
-    return sendto(fd, buff, len, 0, (struct sockaddr *)data, data_len);
+    int ret = 0;
+    long nbytes = len;
+    ret = pj_sock_sendto(fd, buff, &nbytes, 0, (pj_sockaddr_t *)data, data_len);
+    if( ret != 0 ) {
+        PERROR_IF_TRUE(1, "Error in sending data\n");
+        return -1;
+    }
+    return nbytes;
 }
 
 static int tty_sendto(int fd, char *buff, int len, void *data, unsigned int data_len) {
-    return write(fd, buff, len);
+    (void)fd, (void) buff, (void) len, (void)data, (void)data_len;
+    return -1;
+    //return write(fd, buff, *len);
 }
 
 #define USERVER_BUFSIZE 512
-void *$UPROTO$_server_proc(void *param) {
+int $UPROTO$_server_proc(void *param) {
     int ret;
     unsigned int len;
     
@@ -98,11 +128,11 @@ void *$UPROTO$_server_proc(void *param) {
     char *first, *second, *third;
     char cnt_str[30];
 
-    struct sockaddr_in caddr;
+    pj_sockaddr_in caddr;
     char *caddr_str;
-    struct timeval timeout;
+    pj_time_val timeout;
 
-    fd_set read_fds;
+    pj_fd_set_t read_fds;
 
 	char buffer[USERVER_BUFSIZE];
 	$UPROTO$_request_t request;
@@ -141,8 +171,8 @@ void *$UPROTO$_server_proc(void *param) {
     }
 
     // thread loop
-    timeout.tv_sec = 0;
-    timeout.tv_usec = 100 * 1000;
+    timeout.sec = 0;
+    timeout.msec = 100;
     userver->is_end = 0;
 
 
@@ -150,26 +180,27 @@ void *$UPROTO$_server_proc(void *param) {
 
         while (!userver->is_online) {
             SHOW_LOG(3, "Server is currently offline...\n");
-            usleep(8*1000*1000);
+            //usleep(8*1000*1000);
+            pj_thread_sleep(1000);
         }
 
-        FD_ZERO(&read_fds);
-        FD_SET(userver->fd, &read_fds);
+        PJ_FD_ZERO(&read_fds);
+        PJ_FD_SET(userver->fd, &read_fds);
 
-        pthread_mutex_lock(&userver->mutex);
-        ret = select(userver->fd + 1, &read_fds, NULL, NULL, &timeout); 
-        pthread_mutex_unlock(&userver->mutex);
+        pj_mutex_lock(userver->mutex);
+        ret = pj_sock_select(userver->fd + 1, &read_fds, NULL, NULL, &timeout); 
+        pj_mutex_unlock(userver->mutex);
 
         EXIT_IF_TRUE(ret < 0, "Error on server socket\n");
 
-        if( FD_ISSET(userver->fd, &read_fds) ) {
+        if( PJ_FD_ISSET(userver->fd, &read_fds) ) {
             len = sizeof(caddr);
-            memset(&caddr, '\0', len);
+            pj_bzero(&caddr, len);
 
-            pthread_mutex_lock(&userver->mutex);
+            pj_mutex_lock(userver->mutex);
             ret = userver->recv_f(userver->fd, buffer, USERVER_BUFSIZE, (void *)&caddr, &len);
-            pthread_mutex_unlock(&userver->mutex);
-            caddr_str = inet_ntoa(caddr.sin_addr);
+            pj_mutex_unlock(userver->mutex);
+            caddr_str = pj_inet_ntoa(caddr.sin_addr);
 
             if( ret > 0 ) {
                 buffer[ret] = '\0';
@@ -178,42 +209,50 @@ void *$UPROTO$_server_proc(void *param) {
                 userver->on_request_f(userver, &request, caddr_str);
             }
         }
-        usleep(100*1000);
+        //usleep(100*1000);
+        pj_thread_sleep(100);
         // if userver->fd is ready to write. When write finish, call userver->on_sent();
         // else --> time out
     }
-	return NULL;
+	return 0;
 }
 
 void $UPROTO$_server_start($UPROTO$_server_t *userver) {
-    pthread_create(&userver->master_thread, NULL, $UPROTO$_server_proc, userver);
+    pj_thread_create(userver->pool, NULL, $UPROTO$_server_proc, userver, PJ_THREAD_DEFAULT_STACK_SIZE, 0, &userver->master_thread);
 }
 
 void $UPROTO$_server_join($UPROTO$_server_t *userver, char *multicast_ip) {
-    struct ip_mreq mreq;
-    int ret;
-    mreq.imr_multiaddr.s_addr = inet_addr(multicast_ip);
-    mreq.imr_interface.s_addr = htonl(INADDR_ANY);
+    pj_ip_mreq mreq;
+    pj_str_t s, s1;
+    pj_status_t ret;
 
-    pthread_mutex_lock(&userver->mutex);
-    ret = setsockopt(userver->fd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq,sizeof(mreq));
-    PERROR_IF_TRUE(ret < 0, "Error in joining mcast group");
-    pthread_mutex_unlock(&userver->mutex);
+    pj_bzero(&mreq, sizeof(pj_ip_mreq));
+	mreq.imr_multiaddr = pj_inet_addr(pj_cstr(&s, multicast_ip));
+	mreq.imr_interface = pj_inet_addr(pj_cstr(&s1, "0.0.0.0"));
+
+    //mreq.imr_multiaddr.s_addr = inet_addr(multicast_ip);
+    //mreq.imr_interface.s_addr = htonl(INADDR_ANY);
+
+    pj_mutex_lock(userver->mutex);
+    ret = pj_sock_setsockopt(userver->fd, PJ_SOL_IP, PJ_IP_ADD_MEMBERSHIP, &mreq,sizeof(mreq));
+    PERROR_IF_TRUE(ret != 0, "Error in joining mcast group");
+    pj_mutex_unlock(userver->mutex);
 }
 
 void $UPROTO$_server_leave($UPROTO$_server_t *userver, char *multicast_ip) {
-    struct ip_mreq mreq;
-    int ret;
-    mreq.imr_multiaddr.s_addr = inet_addr(multicast_ip);
-    mreq.imr_interface.s_addr = htonl(INADDR_ANY);
+    pj_ip_mreq mreq;
+    pj_str_t s;
+    pj_status_t ret;
+    mreq.imr_multiaddr = pj_inet_addr(pj_cstr(&s, multicast_ip));
+    mreq.imr_interface.s_addr = pj_htonl(PJ_INADDR_ANY);
 
-    pthread_mutex_lock(&userver->mutex);
-    ret = setsockopt(userver->fd, IPPROTO_IP, IP_DROP_MEMBERSHIP, &mreq,sizeof(mreq));
-    PERROR_IF_TRUE(ret < 0, "Error in leaving mcast group");
-    pthread_mutex_unlock(&userver->mutex);
+    pj_mutex_lock(userver->mutex);
+    ret = pj_sock_setsockopt(userver->fd, PJ_SOL_IP, PJ_IP_DROP_MEMBERSHIP, &mreq,sizeof(mreq));
+    PERROR_IF_TRUE(ret != 0, "Error in leaving mcast group");
+    pj_mutex_unlock(userver->mutex);
 }
 
 void $UPROTO$_server_end($UPROTO$_server_t *userver) {
     userver->is_end = 1;
-    pthread_join(userver->master_thread, NULL);
+    CHECK(__FILE__, pj_thread_join(userver->master_thread));
 }
