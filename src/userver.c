@@ -38,7 +38,8 @@ static void open_udp_socket($UPROTO$_server_t *userver, char *addr, int port) {
 
 #ifdef __ICS_INTEL__
     // Allow socket reuse
-    CHECK(__FILE__, pj_sock_setsockopt(userver->fd, PJ_SOL_SOCKET, PJ_SO_REUSEADDR, &optval, sizeof(optval)));
+    CHECK(__FILE__, pj_sock_setsockopt(userver->fd, PJ_SOL_SOCKET, 512, &optval, sizeof(optval)));
+    //CHECK(__FILE__, pj_sock_setsockopt(userver->fd, PJ_SOL_SOCKET, PJ_SO_REUSEADDR, &optval, sizeof(optval)));
 #endif
 
     // bind the socket
