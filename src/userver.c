@@ -21,11 +21,10 @@ void $UPROTO$_server_init($UPROTO$_server_t *userver, char *conn_str, pj_pool_t 
     userver->pool = pool;
     ansi_copy_str(userver->connect_str, conn_str);
     userver->is_online = 1;
-    //ret = pthread_mutex_init(&userver->mutex, NULL);
-    //EXIT_IF_TRUE(ret != 0, "Error creating mutex\n");
     CHECK(__FILE__, pj_mutex_create_simple(pool, "", &userver->mutex));
-    if (userver->on_init_done_f != NULL)
+    if (userver->on_init_done_f != NULL){
         userver->on_init_done_f(userver);
+	}
 }
 
 static void open_udp_socket($UPROTO$_server_t *userver, char *addr, int port) {
@@ -38,8 +37,8 @@ static void open_udp_socket($UPROTO$_server_t *userver, char *addr, int port) {
 
 #ifdef __ICS_INTEL__
     // Allow socket reuse
-    CHECK(__FILE__, pj_sock_setsockopt(userver->fd, PJ_SOL_SOCKET, 512, &optval, sizeof(optval)));
-    //CHECK(__FILE__, pj_sock_setsockopt(userver->fd, PJ_SOL_SOCKET, PJ_SO_REUSEADDR, &optval, sizeof(optval)));
+    //CHECK(__FILE__, pj_sock_setsockopt(userver->fd, PJ_SOL_SOCKET, 512, &optval, sizeof(optval)));
+    CHECK(__FILE__, pj_sock_setsockopt(userver->fd, PJ_SOL_SOCKET, PJ_SO_REUSEADDR, &optval, sizeof(optval)));
 #endif
 
     // bind the socket

@@ -95,7 +95,6 @@ function gen_build_request(messages, fieldtypes, sfile, hfile) {
     print "}" >> sfile;
 }
 BEGIN {
-    base_dir=ARGV[2]
 }
 /^BEGIN/ {
     proto=$2;
@@ -140,7 +139,6 @@ END {
     userver_c = "gen/"proto"-server.c";
     uclient_h = "gen/"proto"-client.h";
     uclient_c = "gen/"proto"-client.c";
-
     print "#ifndef __" toupper(proto) "_SERVER_H__" > userver_h;
     print "#define __" toupper(proto) "_SERVER_H__" >> userver_h;
 #    print "#include \"" proto ".h\"" >> userver_h;
