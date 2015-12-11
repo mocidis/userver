@@ -138,9 +138,8 @@ int $UPROTO$_server_proc(void *param) {
 	$UPROTO$_request_t request;
 
     $UPROTO$_server_t *userver = ($UPROTO$_server_t *)param;
-    strncpy(cnt_str, userver->connect_str, strlen(userver->connect_str));
-    len = strlen(cnt_str);
-    cnt_str[len] = '\0';
+	ansi_copy_str(cnt_str, userver->connect_str);
+
     first = cnt_str;
     
     second = strchr(first, ':');
