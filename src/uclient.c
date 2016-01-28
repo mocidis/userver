@@ -37,7 +37,7 @@ static void open_tty($UPROTO$_client_t *uclient, char *path) {
     (void) path;
 }
 
-void $UPROTO$_client_open($UPROTO$_client_t *uclient, char *conn_str) {
+static void $UPROTO$_client_open_int($UPROTO$_client_t *uclient, char *conn_str) {
     char *first, *second, *third;
     int len, port;
 
@@ -65,6 +65,18 @@ void $UPROTO$_client_open($UPROTO$_client_t *uclient, char *conn_str) {
 
 }
 
+void $UPROTO$_client_open($UPROTO$_client_t *uclient, char *conn_str) {
+    uclient->id_f = NULL;
+    uclient->passphrase_f = NULL;
+    $UPROTO$_client_open_int(uclient, conn_str);
+}
+
+void $UPROTO$_client_open_ex($UPROTO$_client_t *uclient, char *conn_str, char *(*id_f)(), char *(*pph_f)()) {
+    uclient->id_f = id_f;
+    uclient->passphrase_f = pph_f;
+    $UPROTO$_client_open_int(uclient, conn_str);
+}
+
 int $UPROTO$_client_send($UPROTO$_client_t *uclient, $UPROTO$_request_t *request) {
 	int ret;
     long nbytes;
@@ -74,6 +86,63 @@ int $UPROTO$_client_send($UPROTO$_client_t *uclient, $UPROTO$_request_t *request
 	
     nbytes = strlen(buff);
 	ret = pj_sock_sendto(uclient->fd, buff, &nbytes, 0, (const pj_sockaddr_t *)uclient->connect_data, sizeof(pj_sockaddr_in));
+
+    if(ret != 0) {
+        PERROR_IF_TRUE(1, "Error in sending data\n");
+        return -1;
+    }
+
+	return nbytes;
+}
+
+int $UPROTO$_client_send_ex($UPROTO$_client_t *uclient, $UPROTO$_request_t *request) {
+	int ret;
+    long nbytes;
+	char buff[UCLIENT_BUFSIZE];
+    char cipher[UCLIENT_BUFSIZE];
+    char message[UCLIENT_BUFSIZE];
+    uint32_t timestamp;
+    char sts[32];
+    char *passphrase = uclient->passphrase_f();
+    char otp[100];
+    char *id = uclient->id_f();
+    char challenge[32];
+    int len = 32;
+    int len1 = 32;
+	
+    lvc_t lvc;
+    
+    timestamp = get_ts();
+    len1 = ts2str(timestamp, sts);
+    
+    generate_otp(otp, passphrase, sts);
+
+    do_encrypt(challenge, &len, sts, len1, otp);
+
+    lvc_init(&lvc, message, UCLIENT_BUFSIZE);
+
+    fprintf(stdout, "lvc_pack id:%s\n", id);
+    lvc_pack( &lvc, strlen(id), id );
+    fprintf(stdout, "lvc_pack ts:%u\n", timestamp);
+    lvc_pack( &lvc, sizeof(uint32_t), (char *)&timestamp );
+    fprintf(stdout, "lvc_pack challenge:%d\n", len);
+    lvc_pack( &lvc, len, challenge );
+
+	$UPROTO$_build_request(buff, sizeof(buff), request);
+    nbytes = strlen(buff);
+
+    fprintf(stdout, "Message to send:%.*s\n", nbytes, buff);
+    
+    len = sizeof(cipher);
+    do_encrypt(cipher, &len, buff, nbytes, otp);
+
+    lvc_pack( &lvc, len, cipher );
+    lvc_pack_finish(&lvc);
+    
+    nbytes = lvc.len;
+
+	ret = pj_sock_sendto(uclient->fd, lvc.data, &nbytes, 0, (const pj_sockaddr_t *)uclient->connect_data, sizeof(pj_sockaddr_in));
+	//ret = pj_sock_sendto(uclient->fd, buff, &nbytes, 0, (const pj_sockaddr_t *)uclient->connect_data, sizeof(pj_sockaddr_in));
 
     if(ret != 0) {
         PERROR_IF_TRUE(1, "Error in sending data\n");

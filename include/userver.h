@@ -15,13 +15,16 @@ struct $UPROTO$_server_s {
     void (*on_request_f)($UPROTO$_server_t *userver, $UPROTO$_request_t *request, char *caddr_str);
     void (*on_init_done_f)($UPROTO$_server_t *userver);
     void (*on_open_socket_f)($UPROTO$_server_t *userver);
+    char *(*get_pph_f)(pj_str_t *id);
     void *user_data;
 
     int is_online;
 };
 
 void $UPROTO$_server_init($UPROTO$_server_t *userver, char *conn_str, pj_pool_t *pool);
+void $UPROTO$_server_init_ex($UPROTO$_server_t *userver, char *conn_str, pj_pool_t *pool, char *(*get_pph_f)(pj_str_t *id));
 void $UPROTO$_server_start($UPROTO$_server_t *userver);
+void $UPROTO$_server_start_ex($UPROTO$_server_t *userver);
 void $UPROTO$_server_join($UPROTO$_server_t *userver, char *multicast_ip);
 void $UPROTO$_server_leave($UPROTO$_server_t *userver, char *multicast_ip);
 void $UPROTO$_server_end($UPROTO$_server_t *userver);
