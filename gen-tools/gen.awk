@@ -108,6 +108,9 @@ BEGIN {
     print "    int msg_id;" >> protofile;
     print "    union {" >> protofile;
 }
+/^ENCRYPTED/ {
+    is_encrypted=$2;
+}
 
 /^REQUEST/ {
     req = $2;
@@ -125,6 +128,10 @@ BEGIN {
     for (m in messages) {
         print "#define " toupper(m) " " messages[m] >> protofile;
     }
+    if( is_encrypted == "ON" ) {
+        print "#define USERVER_ENCRYPTED" >> protofile;
+    }
+    print "#define "
     print "#endif" >> protofile;
 }
 

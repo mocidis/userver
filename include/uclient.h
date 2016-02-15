@@ -13,9 +13,9 @@ struct $UPROTO$_client_s {
     char *(*passphrase_f)();
 };
 
-void $UPROTO$_client_open($UPROTO$_client_t *uclient, char *conn_str);
-void $UPROTO$_client_open_ex($UPROTO$_client_t *uclient, char *conn_str, char *(*id_f)(), char *(*pph_f)());
+void $UPROTO$_client_open($UPROTO$_client_t *uclient, char *conn_str, char *(*id_f)(), char *(*pph_f)());
+//void $UPROTO$_client_open_ex($UPROTO$_client_t *uclient, char *conn_str, char *(*id_f)(), char *(*pph_f)());
 int $UPROTO$_client_send($UPROTO$_client_t *uclient, $UPROTO$_request_t *req);
-int $UPROTO$_client_send_ex($UPROTO$_client_t *uclient, $UPROTO$_request_t *req);
+//int $UPROTO$_client_send_ex($UPROTO$_client_t *uclient, $UPROTO$_request_t *req);
 //int $UPROTO$_client_recv($UPROTO$_client_t *uclient, $UPROTO$_response_t *resp);
 void $UPROTO$_client_close($UPROTO$_client_t *uclient);

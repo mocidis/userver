@@ -21,10 +21,10 @@ struct $UPROTO$_server_s {
     int is_online;
 };
 
-void $UPROTO$_server_init($UPROTO$_server_t *userver, char *conn_str, pj_pool_t *pool);
-void $UPROTO$_server_init_ex($UPROTO$_server_t *userver, char *conn_str, pj_pool_t *pool, char *(*get_pph_f)(pj_str_t *id));
+void $UPROTO$_server_init($UPROTO$_server_t *userver, char *conn_str, pj_pool_t *pool, char *(*get_pph_f)(pj_str_t *id));
+//void $UPROTO$_server_init_ex($UPROTO$_server_t *userver, char *conn_str, pj_pool_t *pool, char *(*get_pph_f)(pj_str_t *id));
 void $UPROTO$_server_start($UPROTO$_server_t *userver);
-void $UPROTO$_server_start_ex($UPROTO$_server_t *userver);
+//void $UPROTO$_server_start_ex($UPROTO$_server_t *userver);
 void $UPROTO$_server_join($UPROTO$_server_t *userver, char *multicast_ip);
 void $UPROTO$_server_leave($UPROTO$_server_t *userver, char *multicast_ip);
 void $UPROTO$_server_end($UPROTO$_server_t *userver);
